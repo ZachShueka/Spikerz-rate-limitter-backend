@@ -101,7 +101,7 @@ if is_user_suspended or is_already_at_limit then
 
     result_payload = { 
         request_count_before_inc, 
-        0, 
+        current_request_limit - request_count_before_inc, 
         current_window_duration_ms, 
         final_blocked_action, 
         current_timestamp_ms, 
