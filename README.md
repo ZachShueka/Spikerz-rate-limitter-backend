@@ -16,13 +16,26 @@ Using atomic Lua scripts in Redis, it manages user quotas while providing an adm
 ```
 
 ### Prerequisites
-##### .env file with REDIS_HOST,
-REDIS_PORT,
-REDIS_PASSWORD,
-REDIS_DB
 
 ##### Running redis instance
 ##### npm install
+##### .env file
+```text
+# The hostname or IP address of your Redis server
+REDIS_HOST=
+
+# The port your Redis server is listening on (default is 6379)
+REDIS_PORT=
+
+# Leave empty if your local Redis has no password
+REDIS_PASSWORD=
+
+# The Redis database index (0-15)
+REDIS_DB=
+
+# The port the NestJS server will run on
+PORT=
+```
 
 ### Running the app
 #### development
