@@ -5,7 +5,6 @@ export interface RedisConfigObject {
 	port: number;
 	password?: string;
 	db: number;
-	keyPrefix?: string;
 }
 
 export default registerAs(
@@ -15,6 +14,5 @@ export default registerAs(
 		port: Number.parseInt(process.env.REDIS_PORT ?? "6379", 10),
 		password: process.env.REDIS_PASSWORD,
 		db: Number.parseInt(process.env.REDIS_DB ?? "0", 10),
-		keyPrefix: process.env.REDIS_KEY_PREFIX,
 	}),
 );

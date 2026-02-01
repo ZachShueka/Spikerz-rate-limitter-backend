@@ -2,5 +2,10 @@
 	"$schema": "https://biomejs.dev/schemas/2.3.13/schema.json",
 	"files": {
 		"includes": ["src/**/*.ts", "!src/redis/redis.service.ts"]
+	},
+	"javascript": {
+		"parser": {
+			"unsafeParameterDecoratorsEnabled": true
+		}
 	}
 }

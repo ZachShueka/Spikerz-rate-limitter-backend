@@ -1,10 +1,11 @@
 import { Module } from "@nestjs/common";
-import { APP_INTERCEPTOR } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import redisConfig from "./config/redis.config";
-import { RateLimitInterceptor } from "./interceptors/rate-limit-interceptor/rate-limit.interceptor";
+import { EventsModule } from "./events/events.module";
+import { UsersModule } from "./user/users.module";
+import { RateLimitModule } from "./rate-limiter/rate-limiter.module";
 import { RedisModule } from "./redis/redis.module";
 
 @Module({
@@ -14,14 +15,11 @@ import { RedisModule } from "./redis/redis.module";
 			load: [redisConfig],
 		}),
 		RedisModule.forRootAsync(redisConfig.asProvider()),
+		EventsModule,
+		RateLimitModule,
+		UsersModule,
 	],
 	controllers: [AppController],
-	providers: [
-		AppService,
-		{
-			provide: APP_INTERCEPTOR,
-			useClass: RateLimitInterceptor,
-		},
-	],
+	providers: [AppService],
 })
 export class AppModule {}
