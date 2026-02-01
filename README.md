@@ -15,8 +15,13 @@ Using atomic Lua scripts in Redis, it manages user quotas while providing an adm
 +--------------------------------+------------+-----------------------------------------------------------+
 ```
 
-###Prerequisites
-##### running redis instance
+### Prerequisites
+##### .env file with REDIS_HOST,
+REDIS_PORT,
+REDIS_PASSWORD,
+REDIS_DB
+
+##### Running redis instance
 ##### npm install
 
 ### Running the app
@@ -27,7 +32,7 @@ $ npm run start
 $ npm run start:dev
 
 #### Test Suite
-The system includes a unit test for the rate limit interceptor logic.Bash#
+The system includes a unit test for the rate limit interceptor, to run : 
 $ npm run test
 
 #### Swagger Documentation
@@ -44,7 +49,7 @@ Atomic check and increment via Redis Lua.
 ##### Broadcasting:
 Send real-time status to the EventsGateway.
 ##### Action:
-200 OK: Request allowed.
-401 Unauthorized: No 'x-user-id' header provided.
-403 Forbidden: User manually suspended.
-429 Too Many Requests: Quota exhausted.
+###### 200 OK: Request allowed.
+###### 401 Unauthorized: No 'x-user-id' header provided.
+###### 403 Forbidden: User manually suspended.
+###### 429 Too Many Requests: Quota exhausted.
