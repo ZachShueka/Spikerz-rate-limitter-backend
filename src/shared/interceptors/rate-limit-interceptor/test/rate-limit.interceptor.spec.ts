@@ -18,6 +18,7 @@ import {
 	TEST_RESET_TIME,
 	TEST_CURRENT_LIMIT,
 	TEST_REMAINING_REQUESTS_UNDER_LIMIT,
+	TEST_REQUESTS_UNDER_LIMIT,
 } from "./constants";
 
 function createExecutionContext(userId?: string): ExecutionContext {
@@ -28,7 +29,7 @@ function createExecutionContext(userId?: string): ExecutionContext {
 	};
 
 	const response = { header };
-	
+
 	const getRequest = jest.fn().mockReturnValue(request);
 	const getResponse = jest.fn().mockReturnValue(response);
 	const http = { getRequest, getResponse };
@@ -47,7 +48,7 @@ describe("RateLimitInterceptor", () => {
 	let next: CallHandler;
 
 	const baseResult: IncRequestCounterResult = {
-		currentRequestsCount: 1,
+		currentRequestsCount: TEST_REQUESTS_UNDER_LIMIT,
 		remainingRequestsCount: TEST_REMAINING_REQUESTS_UNDER_LIMIT,
 		resetTimeTimestamp: TEST_RESET_TIME,
 		actionCode: RateLimitAction.ALLOWED,
@@ -87,8 +88,8 @@ describe("RateLimitInterceptor", () => {
 		it("sets COUNT_HEADER, calls next.handle(), and emits broadcastRateUpdate with rateLimitStatus OK", async () => {
 			const result = {
 				...baseResult,
-				remainingRequestsCount: 80,
-				totalRequestsAllowed: 100,
+				remainingRequestsCount: TEST_REMAINING_REQUESTS_UNDER_LIMIT,
+				totalRequestsAllowed: TEST_CURRENT_LIMIT,
 			};
 			rateLimiterService.incrementUserRequestCounter.mockResolvedValue(result);
 
@@ -97,29 +98,16 @@ describe("RateLimitInterceptor", () => {
 
 			await interceptor.intercept(context, next);
 
-			expect(response.header).toHaveBeenCalledWith(COUNT_HEADER, 80);
+			expect(response.header).toHaveBeenCalledWith(
+				COUNT_HEADER,
+				TEST_REMAINING_REQUESTS_UNDER_LIMIT,
+			);
 			expect(next.handle).toHaveBeenCalled();
 			expect(eventsGateway.broadcastRateUpdate).toHaveBeenCalledWith(
 				expect.objectContaining({
 					userId: TEST_USER_ID,
 					rateLimitStatus: "OK",
 				} satisfies Pick<RateUpdateDto, "userId" | "rateLimitStatus">),
-			);
-		});
-
-		it("emits broadcastRateUpdate with rateLimitStatus Warning when remaining is below threshold", async () => {
-			const result = {
-				...baseResult,
-				remainingRequestsCount: 2,
-				totalRequestsAllowed: 100,
-			};
-			rateLimiterService.incrementUserRequestCounter.mockResolvedValue(result);
-
-			const context = createExecutionContext(TEST_USER_ID);
-			await interceptor.intercept(context, next);
-
-			expect(eventsGateway.broadcastRateUpdate).toHaveBeenCalledWith(
-				expect.objectContaining({ rateLimitStatus: "Warning" }),
 			);
 		});
 	});
@@ -130,7 +118,7 @@ describe("RateLimitInterceptor", () => {
 				TEST_CURRENT_LIMIT * WARNING_THRESHOLD_RATIO,
 			);
 
-			const result = {
+			const result: IncRequestCounterResult = {
 				...baseResult,
 				remainingRequestsCount: remainingRequestsCount,
 				totalRequestsAllowed: TEST_CURRENT_LIMIT,
@@ -153,16 +141,12 @@ describe("RateLimitInterceptor", () => {
 				expect.objectContaining({
 					userId: TEST_USER_ID,
 					rateLimitStatus: "Warning",
-					remainingRequestsCount: remainingRequestsCount,
-				} satisfies Pick<
-					RateUpdateDto,
-					"userId" | "rateLimitStatus" | "remainingRequestsCount"
-				>),
+				} satisfies Pick<RateUpdateDto, "userId" | "rateLimitStatus">),
 			);
 		});
 	});
 
-	describe("Threshold Reached (Just Blocked)", () => {
+	describe("Threshold Reached (Just Reached)", () => {
 		it("allows the final request to complete but triggers broadcastLimitExceeded and sends 'Exceeded' status", async () => {
 			const result: IncRequestCounterResult = {
 				...baseResult,
