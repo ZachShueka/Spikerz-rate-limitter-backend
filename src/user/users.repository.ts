@@ -7,21 +7,19 @@ import {
 import {
 	GLOBAL_REQUEST_LIMIT_DEFAULT,
 	RATE_LIMIT_REQUEST_HISTORY_MAX_ENTRIES,
-	RATE_LIMIT_WINDOW_DURATION_MS,
 } from "../rate-limiter/constants";
 import type { RedisWithRateLimit } from "../rate-limiter/types";
 import { getRateLimitStatus } from "src/shared/utilites";
 import type { RateUpdateDto } from "src/events/dtos/rate-update.dto";
 import { RateLimitAction } from "src/shared/interceptors/rate-limit-interceptor/types";
-import type { UserDataDto } from "./dtos/user-data.dto";
+import type { UserFullDataDto } from "./dtos/user-full-data.dto";
 import type { UserRegistryData, UserWindowData } from "./types";
 import {
 	REDIS_CLIENT_INJECT_TOKEN,
-	RATE_LIMIT_WINDOW_BUCKET_PREFIX,
 	RATE_LIMIT_REGISTRY_BUCKET_PREFIX,
-	RATE_LIMIT_REQUEST_HISTORY_BUCKET_PREFIX,
 	RedisSchema,
 } from "src/redis/constants";
+import { UserBaseDataDto } from "./dtos/user-base-data.dto";
 
 @Injectable()
 export class UsersRepository {
@@ -33,13 +31,13 @@ export class UsersRepository {
 	/**
 	 * Fetches all users and their real-time rate limit metrics.
 	 */
-	async findAllUsers(): Promise<RateUpdateDto[]> {
+	async findAllUsers(): Promise<UserBaseDataDto[]> {
 		try {
 			const registryKeys = await this._getAllRegistryKeys();
 			if (registryKeys.length === 0) return [];
 
-			const allUsers: RateUpdateDto[] = await Promise.all(
-				registryKeys.map(async (registryKey): Promise<RateUpdateDto> => {
+			const allUsers: UserBaseDataDto[] = await Promise.all(
+				registryKeys.map(async (registryKey): Promise<UserBaseDataDto> => {
 					const userId = registryKey.split(":")[1];
 					const windowKey = RedisSchema.getWindowKey(userId);
 
@@ -85,6 +83,7 @@ export class UsersRepository {
 						resetTimeTimestamp,
 						rateLimitStatus,
 						lastRequestTimestamp: registryData.lastRequestTimestamp,
+						isSuspended: registryData.isSuspended,
 					};
 				}),
 			);
@@ -101,7 +100,7 @@ export class UsersRepository {
 	 * Retrieves full state for a specific user.
 	 * Combines registry data, window data, and request history list.
 	 */
-	async findOne(userId: string): Promise<UserDataDto> {
+	async findOne(userId: string): Promise<UserFullDataDto> {
 		const registryKey = RedisSchema.getRegistryKey(userId);
 		const windowKey = RedisSchema.getWindowKey(userId);
 		const historyKey = RedisSchema.getHistoryKey(userId);
@@ -189,38 +188,55 @@ export class UsersRepository {
 	}
 
 	/**
-	 * Updates Window fields for a specific user.
-	 * If window does not exist, it will be created with the default duration.
+	 * Updates Window current_request_limit field for a specific user to be current_request_limit + requestCountToAdd.
+	 * If window does not exist, it will be created with the users base request limit + requestCountToAdd.
 	 */
-	async updateUserWindow(
+	async addRequestsToUserWindow(
 		userId: string,
-		data: Partial<Omit<UserWindowData, "windowDurationMs">>,
+		requestCountToAdd: number,
 	): Promise<void> {
-		const key = RedisSchema.getWindowKey(userId);
-		const redisData: Record<string, string | number> = {};
-
-		if (data.currentRequestLimit !== undefined)
-			redisData.current_request_limit = data.currentRequestLimit;
-		if (data.requestCount !== undefined)
-			redisData.request_count = data.requestCount;
-
-		if (Object.keys(redisData).length === 0) return;
+		const registryKey = RedisSchema.getRegistryKey(userId);
+		const windowKey = RedisSchema.getWindowKey(userId);
 
 		try {
-			const windowExists = await this._redisClient.exists(key);
+			const baseLimitStr = await this._redisClient.hget(
+				registryKey,
+				"base_request_limit",
+			);
 
-			if (windowExists) {
-				await this._redisClient.hset(key, redisData);
-			} else {
+			if (!baseLimitStr) {
+				throw new NotFoundException(`User ${userId} not found in registry.`);
+			}
+
+			const baseLimit = Number(baseLimitStr);
+
+			const currentLimit = await this._redisClient.hincrby(
+				windowKey,
+				"current_request_limit",
+				requestCountToAdd,
+			);
+
+			/**
+			 * If the result equals the amount we added, it means the field didn't
+			 * exist before (or was 0). We need to add the base limit and init the count.
+			 */
+			if (currentLimit === requestCountToAdd) {
 				await this._redisClient
 					.multi()
-					.hset(key, redisData)
-					.pexpire(key, RATE_LIMIT_WINDOW_DURATION_MS)
+					.hset(
+						windowKey,
+						"current_request_limit",
+						baseLimit + requestCountToAdd,
+					)
+					.hset(windowKey, "request_count", 0)
+					// If your windows have a TTL, add it here:
+					// .expire(windowKey, 3600)
 					.exec();
 			}
 		} catch (error) {
+			if (error instanceof NotFoundException) throw error;
 			throw new ServiceUnavailableException(
-				`Failed to update window data for user ${userId}`,
+				`Failed to adjust window for user ${userId}`,
 			);
 		}
 	}
