@@ -1,18 +1,18 @@
 import { Injectable } from "@nestjs/common";
 import { GLOBAL_REQUEST_LIMIT_DEFAULT } from "../rate-limiter/constants";
 import { UsersRepository } from "./users.repository";
-import type { RateUpdateDto } from "src/events/dtos/rate-update.dto";
-import type { UserDataDto } from "./dtos/user-data.dto";
+import type { UserFullDataDto } from "./dtos/user-full-data.dto";
+import { UserBaseDataDto } from "./dtos/user-base-data.dto";
 
 @Injectable()
 export class UsersService {
 	constructor(private readonly _usersRepository: UsersRepository) {}
 
-	async getAllUsersData(): Promise<RateUpdateDto[]> {
+	async getAllUsersData(): Promise<UserBaseDataDto[]> {
 		return this._usersRepository.findAllUsers();
 	}
 
-	async getUserData(userId: string): Promise<UserDataDto> {
+	async getUserData(userId: string): Promise<UserFullDataDto> {
 		return this._usersRepository.findOne(userId);
 	}
 
@@ -41,8 +41,6 @@ export class UsersService {
 		userId: string,
 		requestAmountToAdd: number,
 	): Promise<void> {
-		this._usersRepository.updateUserWindow(userId, {
-			requestCount: requestAmountToAdd,
-		});
+		this._usersRepository.addRequestsToUserWindow(userId, requestAmountToAdd);
 	}
 }
